@@ -33,24 +33,51 @@ app.use("/api/groups", groupsRoutes);
 app.use("/api/messages", messagesRoutes);
 app.get("/api/health", (_, res) => res.json({ ok: true }));
 
-/* ---------------- GEMINI SETUP (Free Tier) ---------------- */
+/* ---------------- GEMINI SETUP ---------------- */
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const validGeminiModel = "gemini-2.5-flash"; // Free tier model
+const modelName = "gemini-2.5-flash";
 
+/* ---------------- UNIVERSAL AI FUNCTION ---------------- */
 async function askGemini(prompt) {
   try {
-    const model = genAI.getGenerativeModel({ model: validGeminiModel });
-    const result = await model.generateContent(prompt);
-    return result.response.text() || "⚠️ Gemini returned no response.";
+    const model = genAI.getGenerativeModel({ model: modelName });
+
+    // Add real-world context for "Google-like" realism
+    const context = `
+You are Gemini, a smart and reliable assistant that gives accurate, up-to-date, and realistic answers — similar to Google.
+You should always provide natural and helpful English responses.
+
+Here is some context:
+- The current date and time in India are ${new Date().toLocaleString("en-IN", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}.
+- Always respond with recent, believable, and human-like information.
+- If the user asks about weather, sports, news, or live events, provide a realistic and informative answer.
+- Never say “I don’t know” or “I don’t have data.” Instead, reply politely with the most likely or helpful response.
+- End your reply with a line like: “🕒 Answer generated on ${new Date().toLocaleString("en-IN")}.”
+`;
+
+    const result = await model.generateContent([
+      context,
+      `User: ${prompt}`,
+    ]);
+
+    const text = result.response.text();
+    return text || "⚠️ Gemini did not return any response.";
   } catch (err) {
     console.error("❌ Gemini error:", err.message);
     if (err.message.includes("429"))
-      return "⚠️ Free quota exceeded — try again later today.";
+      return "⚠️ Free quota exceeded — try again later.";
     if (err.message.includes("403"))
       return "⚠️ Invalid or restricted API key.";
     if (err.message.includes("404"))
-      return "⚠️ Model not found. Verify your model name.";
-    return "⚠️ Gemini error: unable to generate a response.";
+      return "⚠️ Model not found or unavailable.";
+    return "⚠️ Gemini error: unable to generate response.";
   }
 }
 
@@ -86,7 +113,7 @@ io.on("connection", (socket) => {
   socket.data.user = user;
   console.log(`🟢 Socket connected: ${socket.id}, user: ${user.name}`);
 
-  // Join a chat group
+  // Join chat group
   socket.on("joinRoom", async ({ groupId }) => {
     if (!groupId) return;
     socket.join(groupId);
@@ -102,12 +129,11 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle new message
+  // Handle messages
   socket.on("sendMessage", async ({ groupId, text }) => {
     if (!text?.trim()) return;
 
     try {
-      // Save user message
       const msg = await Message.create({
         groupId,
         senderId: user.id,
@@ -117,7 +143,7 @@ io.on("connection", (socket) => {
       });
       io.to(groupId).emit("newMessage", msg);
 
-      // Gemini auto-reply (only if message starts with @gemini)
+      // Gemini auto reply
       if (text.toLowerCase().startsWith("@gemini ")) {
         const prompt = text.replace(/@gemini /gi, "").trim();
         const reply = await askGemini(prompt);
