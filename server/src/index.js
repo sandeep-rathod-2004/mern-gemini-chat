@@ -18,7 +18,27 @@ dotenv.config();
 
 /* ---------------- EXPRESS SETUP ---------------- */
 const app = express();
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+
+// ✅ Allow both localhost (for dev) and deployed frontend (for prod)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://mern-gemini-chat.vercel.app",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn("❌ Blocked by CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 /* ---------------- MONGODB ---------------- */
@@ -42,31 +62,27 @@ async function askGemini(prompt) {
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
 
-    // Add real-world context for "Google-like" realism
     const context = `
 You are Gemini, a smart and reliable assistant that gives accurate, up-to-date, and realistic answers — similar to Google.
 You should always provide natural and helpful English responses.
 
 Here is some context:
 - The current date and time in India are ${new Date().toLocaleString("en-IN", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })}.
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}.
 - Always respond with recent, believable, and human-like information.
 - If the user asks about weather, sports, news, or live events, provide a realistic and informative answer.
-- Never say “I don’t know” or “I don’t have data.” Instead, reply politely with the most likely or helpful response.
-- End your reply with a line like: “🕒 Answer generated on ${new Date().toLocaleString("en-IN")}.”
+- End your reply with a line like: “🕒 Answer generated on ${new Date().toLocaleString(
+      "en-IN"
+    )}.”
 `;
 
-    const result = await model.generateContent([
-      context,
-      `User: ${prompt}`,
-    ]);
-
+    const result = await model.generateContent([context, `User: ${prompt}`]);
     const text = result.response.text();
     return text || "⚠️ Gemini did not return any response.";
   } catch (err) {
@@ -84,7 +100,10 @@ Here is some context:
 /* ---------------- SERVER + SOCKET.IO ---------------- */
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] },
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+  },
 });
 
 /* ---------------- JWT VERIFY ---------------- */
@@ -113,7 +132,6 @@ io.on("connection", (socket) => {
   socket.data.user = user;
   console.log(`🟢 Socket connected: ${socket.id}, user: ${user.name}`);
 
-  // Join chat group
   socket.on("joinRoom", async ({ groupId }) => {
     if (!groupId) return;
     socket.join(groupId);
@@ -129,7 +147,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle messages
   socket.on("sendMessage", async ({ groupId, text }) => {
     if (!text?.trim()) return;
 
