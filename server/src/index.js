@@ -23,6 +23,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "https://mern-gemini-chat.vercel.app",
+  "https://mern-gemini-chat-o2mu.vercel.app"  // your new frontend link
 ];
 
 app.use(
@@ -43,14 +44,22 @@ app.use(express.json());
 
 /* ---------------- MONGODB ---------------- */
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 /* ---------------- ROUTES ---------------- */
+app.get("/", (_, res) =>
+  res.send("🌱 Gemini Chat backend is running successfully on Render!")
+);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/groups", groupsRoutes);
 app.use("/api/messages", messagesRoutes);
+
 app.get("/api/health", (_, res) => res.json({ ok: true }));
 
 /* ---------------- GEMINI SETUP ---------------- */
@@ -61,7 +70,6 @@ const modelName = "gemini-2.5-flash";
 async function askGemini(prompt) {
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
-
     const context = `
 You are Gemini, a smart and reliable assistant that gives accurate, up-to-date, and realistic answers — similar to Google.
 You should always provide natural and helpful English responses.
@@ -76,8 +84,7 @@ Here is some context:
       minute: "2-digit",
     })}.
 - Always respond with recent, believable, and human-like information.
-- If the user asks about weather, sports, news, or live events, provide a realistic and informative answer.
-- End your reply with a line like: “🕒 Answer generated on ${new Date().toLocaleString(
+- End your reply with: “🕒 Answer generated on ${new Date().toLocaleString(
       "en-IN"
     )}.”
 `;
@@ -187,4 +194,6 @@ io.on("connection", (socket) => {
 
 /* ---------------- START SERVER ---------------- */
 const PORT = process.env.PORT || 8000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
