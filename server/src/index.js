@@ -19,11 +19,11 @@ dotenv.config();
 /* ---------------- EXPRESS SETUP ---------------- */
 const app = express();
 
-// ✅ Allow both localhost (for dev) and deployed frontend (for prod)
+// ✅ Allow localhost (dev) + your deployed Vercel domains
 const allowedOrigins = [
   "http://localhost:5173",
   "https://mern-gemini-chat.vercel.app",
-  "https://mern-gemini-chat-o2mu.vercel.app"  // your new frontend link
+  "https://mern-gemini-chat-o2mu.vercel.app", // ✅ your latest frontend URL
 ];
 
 app.use(
@@ -52,15 +52,14 @@ mongoose
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 /* ---------------- ROUTES ---------------- */
-app.get("/", (_, res) =>
-  res.send("🌱 Gemini Chat backend is running successfully on Render!")
-);
+app.get("/", (_, res) => {
+  res.send("🌱 Gemini Chat backend is running successfully on Render!");
+});
 
+app.get("/api/health", (_, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/groups", groupsRoutes);
 app.use("/api/messages", messagesRoutes);
-
-app.get("/api/health", (_, res) => res.json({ ok: true }));
 
 /* ---------------- GEMINI SETUP ---------------- */
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
