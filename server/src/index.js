@@ -19,11 +19,12 @@ dotenv.config();
 /* ---------------- EXPRESS SETUP ---------------- */
 const app = express();
 
-// ✅ Allow localhost (dev) + your deployed Vercel domains
+// ✅ Allowed origins: local dev + both Vercel deployments + Render base URL
 const allowedOrigins = [
   "http://localhost:5173",
   "https://mern-gemini-chat.vercel.app",
-  "https://mern-gemini-chat-o2mu.vercel.app", // ✅ your latest frontend URL
+  "https://mern-gemini-chat-o2mu.vercel.app",
+  "https://mern-gemini-chat.onrender.com", // backend itself
 ];
 
 app.use(
@@ -70,35 +71,18 @@ async function askGemini(prompt) {
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
     const context = `
-You are Gemini, a smart and reliable assistant that gives accurate, up-to-date, and realistic answers — similar to Google.
-You should always provide natural and helpful English responses.
-
+You are Gemini, a smart and reliable assistant that gives accurate, up-to-date, and realistic answers.
 Here is some context:
-- The current date and time in India are ${new Date().toLocaleString("en-IN", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })}.
-- Always respond with recent, believable, and human-like information.
-- End your reply with: “🕒 Answer generated on ${new Date().toLocaleString(
-      "en-IN"
-    )}.”
+- Current date and time in India: ${new Date().toLocaleString("en-IN")}
+Always answer naturally and end with: “🕒 Answer generated on ${new Date().toLocaleString("en-IN")}.”
 `;
-
     const result = await model.generateContent([context, `User: ${prompt}`]);
-    const text = result.response.text();
-    return text || "⚠️ Gemini did not return any response.";
+    return result.response.text() || "⚠️ Gemini did not return a response.";
   } catch (err) {
     console.error("❌ Gemini error:", err.message);
-    if (err.message.includes("429"))
-      return "⚠️ Free quota exceeded — try again later.";
-    if (err.message.includes("403"))
-      return "⚠️ Invalid or restricted API key.";
-    if (err.message.includes("404"))
-      return "⚠️ Model not found or unavailable.";
+    if (err.message.includes("429")) return "⚠️ Free quota exceeded — try again later.";
+    if (err.message.includes("403")) return "⚠️ Invalid or restricted API key.";
+    if (err.message.includes("404")) return "⚠️ Model not found or unavailable.";
     return "⚠️ Gemini error: unable to generate response.";
   }
 }
@@ -109,6 +93,7 @@ const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -186,9 +171,9 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () =>
-    console.log(`🔴 Socket disconnected: ${socket.id}`)
-  );
+  socket.on("disconnect", () => {
+    console.log(`🔴 Socket disconnected: ${socket.id}`);
+  });
 });
 
 /* ---------------- START SERVER ---------------- */
